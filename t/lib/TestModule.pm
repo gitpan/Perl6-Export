@@ -2,15 +2,15 @@ package TestModule;
 
 use Perl6::Export;
 
-sub foo is exported(:ALWAYS) {
+sub foo is export(:MANDATORY) {
 	return 1;
 }
 
-sub bar is exportable {
+sub bar is export {
 	return 1;
 }
 
-sub qux is exportable(:Q) {
+sub qux is export(:Q) {
 	return 1;
 }
 

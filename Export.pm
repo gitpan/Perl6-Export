@@ -1,10 +1,11 @@
 package Perl6::Export;
-our $VERSION = '0.05';
+our $VERSION = '0.07';
 
-my $ident = qr{ [^\W\d] \w* }x;
-our $arglist = qr{ \( (?: (?>[^()]+) | (??{$arglist}))* \) }x;
-my $args  = qr{ \s* $arglist | (?# NOTHING) }x;
-my $proto = qr{ \s* (?: \( [^)]* \) | (?# NOTHING) ) }x;
+my $ident   = qr{ [^\W\d] \w* }x;
+my $arg     = qr{ : $ident \s* ,? \s* }x;
+my $args    = qr{ \s* \( $arg* \) | (?# NOTHING) }x;
+my $defargs = qr{ \s* \( $arg* :DEFAULT $arg* \) }x;
+my $proto   = qr{ \s* (?: \( [^)]* \) | (?# NOTHING) ) }x;
 
 sub add_to {
 	my ($EXPORT, $symbol, $args, $decl) = @_;
@@ -30,7 +31,7 @@ sub false_import_sub {
 				}
 			}
 			@exports = ":DEFAULT" unless @exports;
-			__PACKAGE__->export_to_level(1, $_[0], ':ALWAYS', @exports);	
+			__PACKAGE__->export_to_level(1, $_[0], ':MANDATORY', @exports);	
 			goto &REAL_IMPORT;
 		}
 	};
@@ -39,7 +40,7 @@ sub false_import_sub {
 	return $import_sub;
 }
 
-my $ALWAYS = q[BEGIN{$EXPORT_TAGS{ALWAYS}||=[]}];
+my $MANDATORY = q[BEGIN{$EXPORT_TAGS{MANDATORY}||=[]}];
 
 use Filter::Simple;
 use Digest::MD5 'md5_hex';
@@ -51,22 +52,22 @@ FILTER {
 	my $real_import_sub = "";
 	s/ \b sub \s+ import \s* ([({]) /sub $real_import_name$1/x 
 		 or $real_import_sub = "sub $real_import_name {}";
-	s{( \b sub \s+ ($ident) $proto) \s+ is \s+ exported ($args) }
+	s{( \b sub \s+ ($ident) $proto) \s+ is \s+ export ($defargs) }
 	 { add_to('EXPORT',$2,$3,$1) }gex;
-	s{( \b our \s+ ([\$\@\%]$ident) $proto) \s+ is \s+ exported ($args) }
+	s{( \b our \s+ ([\$\@\%]$ident) $proto) \s+ is \s+ exported ($defargs) }
 	 { add_to('EXPORT',$2,$3,$1) }gex;
-	s{( \b sub \s+ ($ident) $proto ) \s+ is \s+ exportable ($args) }
+	s{( \b sub \s+ ($ident) $proto ) \s+ is \s+ export ($args) }
 	 { add_to('EXPORT_OK',$2,$3,$1) }gex;
-	s{( \b our \s+ ([\$\@\%]$ident) ) \s+ is \s+ exportable ($args) }
+	s{( \b our \s+ ([\$\@\%]$ident) ) \s+ is \s+ export ($args) }
 	 { add_to('EXPORT_OK',$2,$3,$1) }gex;
-	$_ = $real_import_sub . $false_import_sub . $ALWAYS . $_;
+	$_ = $real_import_sub . $false_import_sub . $MANDATORY . $_;
 }
 
 __END__
 
 =head1 NAME
 
-Perl6::Export - Implements the Perl 6 'exported' and 'exportable' traits
+Perl6::Export - Implements the Perl 6 'is export(...)' trait
 
 
 =head1 SYNOPSIS
@@ -79,16 +80,16 @@ Perl6::Export - Implements the Perl 6 'exported' and 'exportable' traits
 	# Export &foo by default, when explicitly requested,
 	# or when the ':ALL' export set is requested...
 
-	sub foo is exported {
+	sub foo is export(:DEFAULT) {
 		print "phooo!";
 	}
 
 
 	# Export &var by default, when explicitly requested,
 	# or when the ':bees', ':pubs', or ':ALL' export set is requested...
-	# the parens after 'is exported' are like the parens of a qw(...)
+	# the parens after 'is export' are like the parens of a qw(...)
 
-	sub bar is exported(:bees :pubs) {
+	sub bar is export(:DEFAULT :bees :pubs) {
 		print "baaa!";
 	}
 
@@ -96,7 +97,7 @@ Perl6::Export - Implements the Perl 6 'exported' and 'exportable' traits
 	# Export &baz when explicitly requested
 	# or when the ':bees' or ':ALL' export set is requested...
 
-	sub baz is exportable(:bees) {
+	sub baz is export(:bees) {
 		print "baassss!";
 	}
 
@@ -104,7 +105,7 @@ Perl6::Export - Implements the Perl 6 'exported' and 'exportable' traits
 	# Always export &qux 
 	# (no matter what else is explicitly or implicitly requested)
 
-	sub qux is exported(:ALWAYS) {
+	sub qux is export(:MANDATORY) {
 		print "quuuuuuuuux!";
 	}
 
@@ -126,21 +127,21 @@ It's very straightforward:
 
 =item *
 
+If you want a subroutine to be capable of being exported (when
+explicitly requested in the C<use> arguments), you mark it
+with the C<is export> trait.
+
+=item *
+
 If you want a subroutine to be automatically exported when the module is
 used (without specific overriding arguments), you mark it with
-the C<is exported> trait.
+the C<is export(:DEFAULT)> trait.
 
 =item *
 
 If you want a subroutine to be automatically exported when the module is
 used (even if the user specifies overriding arguments), you mark it with
-the C<is exported(:ALWAYS)> trait.
-
-=item *
-
-If you want a subroutine to be capable of being exported (when
-explicitly requested in the C<use> arguments), you mark it
-with the C<is exportable> trait.
+the C<is export(:MANDATORY)> trait.
 
 =item * 
 
